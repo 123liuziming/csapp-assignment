@@ -139,7 +139,7 @@ NOTES:
  *   Rating: 1
  */
 int bitAnd(int x, int y) {
-  return 2;
+  return ~((~x) | (~y));
 }
 /* 
  * getByte - Extract byte n from word x
@@ -150,15 +150,10 @@ int bitAnd(int x, int y) {
  *   Rating: 2
  */
 int getByte(int x, int n) {
-
-
-
-
-
-
-
-  return 2;
-
+  int operand = 0xff;
+  int bit_num = ((n << 2) << 2) << 2;
+  operand = operand << (bit_num);
+  return x & bit_num;
 }
 /* 
  * logicalShift - shift x to the right by n, using a logical shift
@@ -179,6 +174,7 @@ int logicalShift(int x, int n) {
  *   Rating: 4
  */
 int bitCount(int x) {
+  
   return 2;
 }
 /* 
