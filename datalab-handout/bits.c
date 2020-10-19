@@ -129,7 +129,6 @@ NOTES:
  *      the correct answers.
  */
 
-
 #endif
 /* 
  * bitAnd - x&y using only ~ and | 
@@ -138,7 +137,8 @@ NOTES:
  *   Max ops: 8
  *   Rating: 1
  */
-int bitAnd(int x, int y) {
+int bitAnd(int x, int y)
+{
   return ~((~x) | (~y));
 }
 /* 
@@ -149,7 +149,8 @@ int bitAnd(int x, int y) {
  *   Max ops: 6
  *   Rating: 2
  */
-int getByte(int x, int n) {
+int getByte(int x, int n)
+{
   return ((x >> (n << 3))) & 0x000000ff;
 }
 /* 
@@ -160,8 +161,10 @@ int getByte(int x, int n) {
  *   Max ops: 20
  *   Rating: 3 
  */
-int logicalShift(int x, int n) {
-  return 2;
+int logicalShift(int x, int n)
+{
+  int mask = ~(((1 << 31) >> n) << 1);
+  return mask & (x >> n);
 }
 /*
  * bitCount - returns count of number of 1's in word
@@ -170,9 +173,29 @@ int logicalShift(int x, int n) {
  *   Max ops: 40
  *   Rating: 4
  */
-int bitCount(int x) {
-  
-  return 2;
+int bitCount(int x)
+{
+  // 分治思想
+  // 构造掩码0101010101....01
+  int tmp_mask = 0x55 | (0x55 << 8);
+  int mask_1 = tmp_mask | (tmp_mask << 16);
+  // 构造掩码00110011....0011
+  tmp_mask = 0x33 | (0x33 << 8);
+  int mask_2 = tmp_mask | (tmp_mask << 16);
+  // 构造掩码00001111....00001111
+  tmp_mask = 0x0f | (0x0f << 8);
+  int mask_3 = tmp_mask | (tmp_mask << 16);
+  // 构造掩码00000000111111110000000011111111
+  int mask_4 = 0xff | (0xff << 16);
+  // 构造掩码00000000000000001111111111111111
+  int mask_5 = 0xff | (0xff << 8);
+  // 之后求总和
+  int count = (x & mask_1) + ((x >> 1) & mask_1);
+  count = (count & mask_2) + ((x >> 2) & mask_2);
+  count = (count & mask_3) + ((x >> 4) & mask_3);
+  count = (count & mask_4) + ((x >> 8) & mask_4);
+  count = (count & mask_5) + ((x >> 16) & mask_5);
+  return count;
 }
 /* 
  * bang - Compute !x without using !
@@ -181,8 +204,9 @@ int bitCount(int x) {
  *   Max ops: 12
  *   Rating: 4 
  */
-int bang(int x) {
-  return 2;
+int bang(int x)
+{
+  return ~(((1 << 31) >> 31) & x);
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -190,8 +214,9 @@ int bang(int x) {
  *   Max ops: 4
  *   Rating: 1
  */
-int tmin(void) {
-  return 2;
+int tmin(void)
+{
+  return 1 << 31;
 }
 /* 
  * fitsBits - return 1 if x can be represented as an 
@@ -202,8 +227,12 @@ int tmin(void) {
  *   Max ops: 15
  *   Rating: 2
  */
-int fitsBits(int x, int n) {
-  return 2;
+int fitsBits(int x, int n)
+{
+  int neg_n = ~n + 1;
+  n = 32 + n;
+  int mask = ((1 << 31) >> n) << 1;
+  return mask & x;
 }
 /* 
  * divpwr2 - Compute x/(2^n), for 0 <= n <= 30
@@ -213,8 +242,11 @@ int fitsBits(int x, int n) {
  *   Max ops: 15
  *   Rating: 2
  */
-int divpwr2(int x, int n) {
-    return 2;
+int divpwr2(int x, int n)
+{
+  int sign = (x >> 31) & 1;
+  int bias = (sign << n) + (~sign + 1);
+  return (x + bias) >> n;
 }
 /* 
  * negate - return -x 
@@ -223,8 +255,9 @@ int divpwr2(int x, int n) {
  *   Max ops: 5
  *   Rating: 2
  */
-int negate(int x) {
-  return 2;
+int negate(int x)
+{
+  return ~x + 1;
 }
 /* 
  * isPositive - return 1 if x > 0, return 0 otherwise 
@@ -233,8 +266,9 @@ int negate(int x) {
  *   Max ops: 8
  *   Rating: 3
  */
-int isPositive(int x) {
-  return 2;
+int isPositive(int x)
+{
+  return !(x >> 31) & (!!x);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -243,7 +277,8 @@ int isPositive(int x) {
  *   Max ops: 24
  *   Rating: 3
  */
-int isLessOrEqual(int x, int y) {
+int isLessOrEqual(int x, int y)
+{
   return 2;
 }
 /*
@@ -253,7 +288,8 @@ int isLessOrEqual(int x, int y) {
  *   Max ops: 90
  *   Rating: 4
  */
-int ilog2(int x) {
+int ilog2(int x)
+{
   return 2;
 }
 /* 
@@ -267,8 +303,9 @@ int ilog2(int x) {
  *   Max ops: 10
  *   Rating: 2
  */
-unsigned float_neg(unsigned uf) {
- return 2;
+unsigned float_neg(unsigned uf)
+{
+  return 2;
 }
 /* 
  * float_i2f - Return bit-level equivalent of expression (float) x
@@ -279,7 +316,8 @@ unsigned float_neg(unsigned uf) {
  *   Max ops: 30
  *   Rating: 4
  */
-unsigned float_i2f(int x) {
+unsigned float_i2f(int x)
+{
   return 2;
 }
 /* 
@@ -293,6 +331,7 @@ unsigned float_i2f(int x) {
  *   Max ops: 30
  *   Rating: 4
  */
-unsigned float_twice(unsigned uf) {
+unsigned float_twice(unsigned uf)
+{
   return 2;
 }
