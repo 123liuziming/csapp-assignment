@@ -279,7 +279,16 @@ int isPositive(int x)
  */
 int isLessOrEqual(int x, int y)
 {
-  return 2;
+  /*
+    <= 相当于求不大于
+    1. x < 0 y > 0
+    2. x > 0 y < 0
+    3. x > 0 y > 0
+    4. x < 0 y < 0
+  */
+  int x_sign = (x >> 31) & 0x1;
+  int y_sign = (x >> 31) & 0x1;
+  return !((!x_sign & y_sign) | (x_sign & y_sign & ((y + ~x + 1) >> 31)) | (!x_sign & !y_sign & ((y + ~x + 1) >> 31)));
 }
 /*
  * ilog2 - return floor(log base 2 of x), where x > 0
