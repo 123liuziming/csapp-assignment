@@ -299,7 +299,18 @@ int isLessOrEqual(int x, int y)
  */
 int ilog2(int x)
 {
-  return 2;
+  // 采用二分法
+  // 看高16位有没有1
+  int shift_16 = (!!(x >> 16)) >> 4;
+  // 有1的话直接往右移16位
+  x = x >> shift_16;
+  int shift_8 = (!!(x >> 8)) >> 3;
+  x = x >> shift_8;
+  int shift_4 = (!!(x >> 4) >> 2);
+  x = x >> shift_4;
+  int shift_2 = (!!(x >> 2) >> 1);
+  x = x >> shift_2;
+  return shift_16 + shift_8 + shift_4 + shift_2 + !!(x >> 1);
 }
 /* 
  * float_neg - Return bit-level equivalent of expression -f for
@@ -314,7 +325,8 @@ int ilog2(int x)
  */
 unsigned float_neg(unsigned uf)
 {
-  return 2;
+  int is_nan = ((uf >> 23) & 0xff == 0xff) & (uf << 9);
+  return is_nan ? uf : ((1 << 31) ^ uf);
 }
 /* 
  * float_i2f - Return bit-level equivalent of expression (float) x
