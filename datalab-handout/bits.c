@@ -304,7 +304,7 @@ int ilog2(int x)
   int shift_8;
   int shift_4;
   int shift_2;
-  // 有1的话直接往右移16位
+  // 有1的话直接往左移16位
   x = x >> shift_16;
   shift_8 = (!!(x >> 8)) << 3;
   x = x >> shift_8;
