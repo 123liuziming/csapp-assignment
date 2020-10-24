@@ -339,7 +339,34 @@ unsigned float_neg(unsigned uf)
  */
 unsigned float_i2f(int x)
 {
-  return 2;
+  /*
+    整数的浮点数一定是规格化数
+    浮点数可以写作类似:1.xxxxxxx * 2^E这种形式
+    这样我们就可以有M=f以及E=e-bias,其中bias=127
+  */
+  // 先判断正负
+  unsigned mask = 1 << 31;
+  unsigned sign = mask & x;
+  unsigned absx = x;
+  unsigned e;
+  unsigned f;
+  unsigned left_bit = 0;
+  unsigned frac_tail;
+  if (sign) 
+    absx = -x;
+  // 找int中最左边的1
+  while (absx & 0x80000000 != 0x80000000) {
+    absx <<= 1;
+    ++left_bit;
+  }
+  // 离x最近的2的次方是2^(31-left_bit)
+  e = 127 + 31 - left_bit;
+  f = ~(mask >> 8) & (absx >> 8);
+  frac_tail = absx & 0xff;
+  unsigned res = e + f + sign;
+  if (frac_tail > 0x80 || (frac_tail == 0x80 && (f & 0x1)))
+    ++res;
+  return res;
 }
 /* 
  * float_twice - Return bit-level equivalent of expression 2*f for
@@ -354,5 +381,19 @@ unsigned float_i2f(int x)
  */
 unsigned float_twice(unsigned uf)
 {
-  return 2;
+  /*
+    浮点数: f = (-1)^sign * 2 ^E * M
+    规格化数: E = e - bias, M = 1 + f
+    非规格化数: E = 1 - bias, M = f
+    所以规格化数的两倍可以让阶码加一
+    非规格化数的两倍可以让尾数变为两倍
+  */
+  unsigned E = uf & 0x7f800000;
+  unsigned S = uf & 0x80000000;
+  unsigned F = uf & 0x007fffff;
+  if (E == 0)
+    uf = S + E + (F << 1);
+  else if (E & 0x7f800000 == 0x7f800000)
+    uf = S + (E + 0x00800000) + F;
+  return uf;
 }
