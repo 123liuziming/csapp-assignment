@@ -177,25 +177,25 @@ int bitCount(int x)
 {
   // 分治思想
   // 构造掩码0101010101....01
-  int tmp_mask = 0x55 | (0x55 << 8);
-  int mask_1 = tmp_mask | (tmp_mask << 16);
+  int tmp_mask_1 = 0x55 | (0x55 << 8);
+  int mask_1 = tmp_mask_1 | (tmp_mask_1 << 16);
   // 构造掩码00110011....0011
-  tmp_mask = 0x33 | (0x33 << 8);
-  int mask_2 = tmp_mask | (tmp_mask << 16);
+  int tmp_mask_2 = 0x33 | (0x33 << 8);
+  int mask_2 = tmp_mask_2 | (tmp_mask_2 << 16);
   // 构造掩码00001111....00001111
-  tmp_mask = 0x0f | (0x0f << 8);
-  int mask_3 = tmp_mask | (tmp_mask << 16);
+  int tmp_mask_3 = 0x0f | (0x0f << 8);
+  int mask_3 = tmp_mask_3 | (tmp_mask_3 << 16);
   // 构造掩码00000000111111110000000011111111
   int mask_4 = 0xff | (0xff << 16);
   // 构造掩码00000000000000001111111111111111
   int mask_5 = 0xff | (0xff << 8);
   // 之后求总和
-  int count = (x & mask_1) + ((x >> 1) & mask_1);
-  count = (count & mask_2) + ((x >> 2) & mask_2);
-  count = (count & mask_3) + ((x >> 4) & mask_3);
-  count = (count & mask_4) + ((x >> 8) & mask_4);
-  count = (count & mask_5) + ((x >> 16) & mask_5);
-  return count;
+  x = (x & mask_1) + ((x >> 1) & mask_1);
+  x = (x & mask_2) + ((x >> 2) & mask_2);
+  x = (x & mask_3) + ((x >> 4) & mask_3);
+  x = (x & mask_4) + ((x >> 8) & mask_4);
+  x = (x & mask_5) + ((x >> 16) & mask_5);
+  return x;
 }
 /* 
  * bang - Compute !x without using !
@@ -206,7 +206,8 @@ int bitCount(int x)
  */
 int bang(int x)
 {
-  return ~(((1 << 31) >> 31) & x);
+  // 只有0是x和-x或值第一位是0的,其它都是1
+  return ~((x | (~x + 1)) >> 31) & 0x1;
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -229,10 +230,8 @@ int tmin(void)
  */
 int fitsBits(int x, int n)
 {
-  int neg_n = ~n + 1;
-  n = 32 + n;
-  int mask = ((1 << 31) >> n) << 1;
-  return mask & x;
+  int shift = 32 + ~n + 1;
+  return !(x ^ ((x << shift) >> shift));
 }
 /* 
  * divpwr2 - Compute x/(2^n), for 0 <= n <= 30
@@ -287,8 +286,8 @@ int isLessOrEqual(int x, int y)
     4. x < 0 y < 0
   */
   int x_sign = (x >> 31) & 0x1;
-  int y_sign = (x >> 31) & 0x1;
-  return !((!x_sign & y_sign) | (x_sign & y_sign & ((y + ~x + 1) >> 31)) | (!x_sign & !y_sign & ((y + ~x + 1) >> 31)));
+  int y_sign = (y >> 31) & 0x1;
+  return !((!x_sign & y_sign) | (x_sign & y_sign & ((y + ~x + 1) >> 31) & 0x1) | (!x_sign & !y_sign & ((y + ~x + 1) >> 31) & 0x1));
 }
 /*
  * ilog2 - return floor(log base 2 of x), where x > 0
@@ -301,14 +300,17 @@ int ilog2(int x)
 {
   // 采用二分法
   // 看高16位有没有1
-  int shift_16 = (!!(x >> 16)) >> 4;
+  int shift_16 = (!!(x >> 16)) << 4;
+  int shift_8;
+  int shift_4;
+  int shift_2;
   // 有1的话直接往右移16位
   x = x >> shift_16;
-  int shift_8 = (!!(x >> 8)) >> 3;
+  shift_8 = (!!(x >> 8)) << 3;
   x = x >> shift_8;
-  int shift_4 = (!!(x >> 4) >> 2);
+  shift_4 = (!!(x >> 4) << 2);
   x = x >> shift_4;
-  int shift_2 = (!!(x >> 2) >> 1);
+  shift_2 = (!!(x >> 2) << 1);
   x = x >> shift_2;
   return shift_16 + shift_8 + shift_4 + shift_2 + !!(x >> 1);
 }
@@ -325,7 +327,7 @@ int ilog2(int x)
  */
 unsigned float_neg(unsigned uf)
 {
-  int is_nan = ((uf >> 23) & 0xff == 0xff) & (uf << 9);
+  int is_nan = (((uf >> 23) & 0xff) == 0xff) && ((uf << 9) != 0);
   return is_nan ? uf : ((1 << 31) ^ uf);
 }
 /* 
@@ -352,10 +354,13 @@ unsigned float_i2f(int x)
   unsigned f;
   unsigned left_bit = 0;
   unsigned frac_tail;
+  unsigned res;
+  if (!x)
+    return 0;
   if (sign) 
     absx = -x;
   // 找int中最左边的1
-  while (absx & 0x80000000 != 0x80000000) {
+  while (!(absx & 0x80000000)) {
     absx <<= 1;
     ++left_bit;
   }
@@ -363,7 +368,7 @@ unsigned float_i2f(int x)
   e = 127 + 31 - left_bit;
   f = ~(mask >> 8) & (absx >> 8);
   frac_tail = absx & 0xff;
-  unsigned res = e + f + sign;
+  res = (e << 23) + f + sign;
   if (frac_tail > 0x80 || (frac_tail == 0x80 && (f & 0x1)))
     ++res;
   return res;
@@ -392,8 +397,8 @@ unsigned float_twice(unsigned uf)
   unsigned S = uf & 0x80000000;
   unsigned F = uf & 0x007fffff;
   if (E == 0)
-    uf = S + E + (F << 1);
-  else if (E & 0x7f800000 == 0x7f800000)
+    uf = (F << 1) + S;
+  else if (E != 0x7f800000)
     uf = S + (E + 0x00800000) + F;
   return uf;
 }
