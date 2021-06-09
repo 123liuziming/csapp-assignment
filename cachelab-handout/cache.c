@@ -1,6 +1,7 @@
 #include "cache.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 void get_flag_and_index(int& flag, int& index, int address) {
@@ -10,18 +11,67 @@ void get_flag_and_index(int& flag, int& index, int address) {
 }
 
 /**
- * 找对应的item，找不到返回-1
+ * 找对应的item，找不到返回NULL
  */
-int find_cache_item(int index, int flag) {
-
+cache_item* find_cache_item(int index, int flag) {
+    int i;
+    for (i = 0; i < associativity; ++i) {
+        cache_item tmp = cache_items[index][i];
+        if (tmp.valid && tmp.flag == flag) {
+            return &cache_items[index][i];
+        }
+    }
+    return NULL;
 }
+
+/**
+ * 找第一个空闲条目位置
+ */ 
+int find_first_empty_item(int index) {
+    int i;
+    for (int i = 0; i < associativity; ++i) {
+        if (cache_items[index][i] != NULL) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * 把块读进缓存
+ */ 
+void load_block_to_cache(int index, int flag, char* trace_message) {
+    cache_item item;
+    item.visit_time = ++time;
+    item.flag = flag;
+    item.valid = true;
+    int first_empty_index = find_first_empty_item(index);
+    if (find_first_empty_item == -1) {
+        find_first_empty_item = evict(index);
+        strncat(trace_message, " eviction");
+    }
+    cache_items[index][first_empty_index] = item;
+}
+
 
 /**
  * LRU驱逐，驱逐time最小的item
  */
-void evict(int index) {  
+int evict(int index) {  
     int i;
-    
+    int min_time = 0x3f3f3f3f;
+    int evict_index = -1;
+    for (i = 0; i < associativity; ++i) {
+        cache_item tmp = cache_items[index][i];
+        if (tmp.visit_time < min_time) {
+            evict_index = i;
+            min_time = tmp.visit_time;
+        }
+    }
+    if (evict_index != -1) {
+        cache_items[index][evict_index] = NULL;
+    }
+    return evict_index;
 }
 
 void parse_option(int argc, char* argv[]) {
@@ -69,22 +119,26 @@ void analyse() {
         while (head[j] != ',') {
             addr[i++] = head[j++];
         }
-        int addr = strtol(addr, NULL, 16);
+        addr[i] = '/0';
+        int address = strtol(addr, NULL, 16);
         int flag, index;
-        get_flag_and_index(&flag, &index, addr);
+        get_flag_and_index(&flag, &index, address);
+        char trace_message[50];
+        strcpy(trace_message, head + 2, strlen(head) - 2);
         switch (head[0]) {
             case 'M':
-                modify(index, flag);
+                modify(index, flag, trace_message);
                 break;
             case 'L':
-                load(index, flag);
+                load(index, flag, trace_message);
                 break;
             case 'S':
-                store(index, flag);
+                store(index, flag, trace_message);
                 break;
             default:
                 break;
         }
+        trace_message[trace_index++] = trace_message;
     }
     fclose(fp);
 }
@@ -95,25 +149,37 @@ void analyse() {
  * 3. 没有的话输出miss，需要驱逐的话输出eviction
  * 4. 有的话输出hit
  */ 
-void load(int index, int flag) {
-
+void load(int index, int flag, char* trace_message) {
+    cache_item* item = find_cache_item(index, flag);
+    if (!item) {
+        strncat(trace_message, " miss");
+        load_block_to_cache(index, flag, trace_message);
+    }
+    else {
+        strncat(trace_message, " hit");
+    }
 }
 
-void store(int index, int flag) {
-
+/**
+ * 1. 找到条目
+ * 2. 如果有，更改valid为false
+ * 3. 如果没有，读到缓存再修改
+ */ 
+void store(int index, int flag, char* trace_message) {
+    cache_item* item = find_cache_item(index, flag);
+    if (!item) {
+        load_block_to_cache(index, flag, trace_message);
+    }
+    item.valid = false;
+    strncat(trace_message, " hit");
 }
-
-void modify(int index, int flag) {
-
-}
-
 
 
 /**
- * 根据b,E,s来确定缓存以及trace_message有多少个条目以及标记位t
- * t = 32 - (s + b)
- * 缓存大小：[2 ^ s - 1][E]
+ * 1. load
+ * 2. 
  */ 
-void init() {
-
+void modify(int index, int flag, char* trace_message) {
+    load(index, flag, trace_message);
+    store(index, flag, trace_message);
 }
