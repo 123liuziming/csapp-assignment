@@ -7,16 +7,17 @@
 
 #define MAX_TRANS_FUNCS 100
 
-#define MAX_TRACE_NUM 10005
-#define MAX_CACHE_NUM 10005
+#define MAX_TRACE_NUM 300005
+#define MAX_CACHE_NUM 300005
 #define MAX_E 105
+#define MAX_STR_LEN 50
 
 extern int hits;
 extern int evitions;
 extern int misses;
 
 typedef struct cache_item {
-    int valid;
+    //int valid;
     int flag;
     //LRU时间
     int visit_time;

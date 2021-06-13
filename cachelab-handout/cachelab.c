@@ -18,7 +18,7 @@ int num_of_set_index_bits;
 char* filename;
 int print_usage;
 int print_verbose;
-char* trace_messages[MAX_TRACE_NUM];
+char trace_messages[MAX_TRACE_NUM][MAX_STR_LEN];
 
 int trace_index = 0;
 int times = 0;
@@ -104,10 +104,11 @@ void registerTransFunction(void (*trans)(int M, int N, int[N][M], int[M][N]),
     func_counter++;
 }
 
-void get_flag_and_index(int* flag, int* index, int address) {
+void get_flag_and_index(unsigned* flag, unsigned* index, unsigned address) {
     const int t = 32 - (num_of_block_bits + num_of_set_index_bits);
-    *flag = (0x80000000 >> (t - 1)) & address;
-    *index = (address << t) & (0x80000000 >> (num_of_set_index_bits - 1));
+    *flag = ((int)0x80000000 >> (t - 1)) & (unsigned)address;
+    unsigned tmp  =((address << t) & ((int)0x80000000 >> (num_of_set_index_bits - 1)));
+    *index = tmp >> (32 - num_of_set_index_bits);
 }
 
 /**
@@ -120,8 +121,10 @@ cache_item* find_cache_item(int index, int flag) {
             continue;
         }
         cache_item tmp = *cache_items[index][i];
-        if (tmp.valid && tmp.flag == flag) {
-            return cache_items[index][i];
+        if (tmp.flag == flag) {
+            cache_item* result = cache_items[index][i];
+            result->visit_time = times;
+            return result;
         }
     }
     return NULL;
@@ -133,7 +136,7 @@ cache_item* find_cache_item(int index, int flag) {
 int find_first_empty_item(int index) {
     int i;
     for (i = 0; i < associativity; ++i) {
-        if (cache_items[index][i] != NULL) {
+        if (cache_items[index][i] == NULL) {
             return i;
         }
     }
@@ -168,16 +171,15 @@ int evict(int index) {
  * 把块读进缓存
  */ 
 void load_block_to_cache(int index, int flag, char* trace_message) {
-    cache_item item;
-    item.visit_time = ++times;
-    item.flag = flag;
-    item.valid = 1;
+    cache_item* item = (cache_item*) malloc(sizeof(cache_item));
+    item->visit_time = times;
+    item->flag = flag;
     int first_empty_index = find_first_empty_item(index);
     if (first_empty_index == -1) {
         first_empty_index = evict(index);
         strncat(trace_message, " eviction", 10);
     }
-    cache_items[index][first_empty_index] = &item;
+    cache_items[index][first_empty_index] = item;
 }
 
 void parse_option(int argc, char* argv[]) {
@@ -193,8 +195,11 @@ void parse_option(int argc, char* argv[]) {
         case 'E':
             associativity = atoi(optarg);
             break;
-        case 'b':
+        case 's':
             num_of_set_index_bits = atoi(optarg);
+            break;
+        case 'b':
+            num_of_block_bits = atoi(optarg);
             break;
         case 't':
             filename = optarg;
@@ -213,6 +218,7 @@ void analyse() {
     }
     char tmp[20];
     while ((fgets(tmp, 20, fp))) {
+        tmp[strlen(tmp) - 1]= '\0';
         if (tmp[0] == 'I') {
             continue;
         }
@@ -221,30 +227,44 @@ void analyse() {
             ++head;
         }
         char addr[10];
-        int i = 0, j = 1;
+        int i = 0, j = 2;
         while (head[j] != ',') {
             addr[i++] = head[j++];
         }
         addr[i] = '\0';
-        int address = strtol(addr, NULL, 16);
-        int flag, index;
+        unsigned address = strtol(addr, NULL, 16);
+        unsigned flag, index;
         get_flag_and_index(&flag, &index, address);
+        char trace_info[50];
+        strcpy(trace_info, head + 2);
         char trace_message[50];
-        strcpy(trace_message, head + 2);
         switch (head[0]) {
             case 'M':
+                strcpy(trace_message, "M ");
+                strncat(trace_message, trace_info, strlen(trace_info) + 1);
                 modify(index, flag, trace_message);
                 break;
             case 'L':
+                strcpy(trace_message, "L ");
+                strncat(trace_message, trace_info, strlen(trace_info) + 1); 
                 load(index, flag, trace_message);
                 break;
             case 'S':
+                strcpy(trace_message, "S ");
+                strncat(trace_message, trace_info, strlen(trace_info) + 1);
                 store(index, flag, trace_message);
                 break;
             default:
                 break;
         }
-        trace_messages[trace_index++] = trace_message;
+        ++times;
+        strcpy(trace_messages[trace_index++], trace_message);
+    }
+    if (print_verbose) {
+        int i;
+        for (i = 0; i < trace_index; ++i) {
+            printf("%s\n", trace_messages[i]);
+        }
     }
     fclose(fp);
 }
@@ -276,11 +296,15 @@ void load(int index, int flag, char* trace_message) {
 void store(int index, int flag, char* trace_message) {
     cache_item* item = find_cache_item(index, flag);
     if (!item) {
+        strncat(trace_message, " miss", 6);
+        ++misses;
         load_block_to_cache(index, flag, trace_message);
     }
-    item->valid = 0;
-    strncat(trace_message, " hit", 5);
-    ++hits;
+    else {
+        //item->valid = 0;
+        strncat(trace_message, " hit", 5);
+        ++hits;
+    }
 }
 
 
