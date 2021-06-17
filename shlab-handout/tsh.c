@@ -85,6 +85,11 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
+#define QUIT 1
+#define BG 2
+#define FG 3
+#define JOBS 4
+
 /*
  * main - The shell's main routine 
  */
@@ -165,9 +170,44 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
-    char* token;
-    const char s[2] = " ";
-    token = strtok(token);
+    char* argv[MAXARGS];
+    char buf[MAXLINE];
+    int bg;
+    pid_t pid;
+    strcpy(buf, cmdline);
+    bg = parseline(buf, argv);
+    if (argv[0] == NULL) {
+        return;
+    }
+    int flag;
+    if (!(flag = builtin_cmd(argv))) {
+        if ((pid = fork()) == 0) {
+            if (execve(argv[0], argv, NULL) < 0) {
+                exit(0);
+            }
+        }
+        //父进程要等待子进程执行完
+        else {
+            //首先将job添加
+            addjob(jobs, pid, bg ? BG : FG, cmdline);
+            waitfg(pid);
+        }
+    }
+    else {
+        switch (flag) {
+            case JOBS:
+                listjobs(jobs);
+                break;
+            case BG:
+            case FG:
+                do_bgfg(argv);
+            case QUIT:
+                exit(1);
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 /* 
@@ -233,6 +273,18 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
+    if (strcmp(argv[0], "quit") == 0) {
+        return QUIT;
+    }
+    else if (strcmp(argv[0], "jobs")) {
+        return JOBS;
+    }
+    else if (strcmp(argv[0], "fg")) {
+        return FG;
+    }
+    else if (strcmp(argv[0], "bg")) {
+        return BG;
+    }
     return 0;     /* not a builtin command */
 }
 
@@ -241,7 +293,21 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
-    return;
+    pid_t pid;
+    struct job_t* job;
+    if (argv[1][0] == '%') {
+        pid = atoi(argv[1] + 1);
+        job = getjobjid(jobs, pid);
+    }
+    else {
+        pid = atoi(argv[1]);
+        job = getjobpid(jobs, pid);
+    }
+    job->state = strcmp(argv[0], "bg") == 0 ? BG : FG;
+    kill(pid, SIGCONT);
+    if (!strcmp(argv[0], "fg")) {
+        waitpid(job->pid, -1, NULL);
+    }
 }
 
 /* 
