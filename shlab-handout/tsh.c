@@ -306,7 +306,7 @@ void do_bgfg(char **argv)
     job->state = strcmp(argv[0], "bg") == 0 ? BG : FG;
     kill(pid, SIGCONT);
     if (!strcmp(argv[0], "fg")) {
-        waitpid(job->pid, -1, NULL);
+        waitpid(job->pid, NULL, 0);
     }
 }
 
@@ -315,7 +315,12 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    return;
+    while (waitpid(pid, NULL, WNOHANG) > 0) {
+        struct job_t* job = getjobpid(jobs, pid);
+        if (job->state != FG) {
+            break;
+        }
+    }
 }
 
 /*****************
