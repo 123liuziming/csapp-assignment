@@ -85,10 +85,10 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
-#define QUIT 1
-#define BG 2
-#define FG 3
-#define JOBS 4
+#define COMMAND_QUIT 4
+#define COMMAND_BG 5
+#define COMMAND_FG 6
+#define COMMAND_JOBS 7
 
 /*
  * main - The shell's main routine 
@@ -195,18 +195,22 @@ void eval(char *cmdline)
     }
     else {
         switch (flag) {
-            case JOBS:
+            case COMMAND_JOBS:
                 listjobs(jobs);
                 break;
-            case BG:
-            case FG:
+            case COMMAND_BG:
+            case COMMAND_FG:
                 do_bgfg(argv);
-            case QUIT:
+            case COMMAND_QUIT:
                 exit(1);
                 break;
             default:
                 break;
         }
+    }
+    if (bg) {
+        struct job_t* job = getjobpid(jobs, pid);
+        printf("[%d] (%d) %s\n", job->jid, job->pid, cmdline);
     }
 }
 
@@ -273,17 +277,17 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
-    if (strcmp(argv[0], "quit") == 0) {
-        return QUIT;
+    if (!strcmp(argv[0], "quit")) {
+        return COMMAND_QUIT;
     }
-    else if (strcmp(argv[0], "jobs")) {
-        return JOBS;
+    else if (!strcmp(argv[0], "jobs")) {
+        return COMMAND_QUIT;
     }
-    else if (strcmp(argv[0], "fg")) {
-        return FG;
+    else if (!strcmp(argv[0], "fg")) {
+        return COMMAND_FG;
     }
-    else if (strcmp(argv[0], "bg")) {
-        return BG;
+    else if (!strcmp(argv[0], "bg")) {
+        return COMMAND_BG;
     }
     return 0;     /* not a builtin command */
 }
@@ -315,12 +319,13 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    while (waitpid(pid, NULL, WNOHANG) > 0) {
+    while (waitpid(pid, NULL, WNOHANG) == 0) {
         struct job_t* job = getjobpid(jobs, pid);
         if (job->state != FG) {
-            break;
+            return;
         }
     }
+    deletejob(jobs, pid);
 }
 
 /*****************
@@ -336,7 +341,10 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
-    return;
+    pid_t pid;
+    while ((pid = waitpid(-1, NULL, 0)) > 0) {
+        deletejob(jobs, pid);
+    }
 }
 
 /* 
@@ -346,7 +354,8 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
-    return;
+    pid_t fg_pid = fgpid(jobs);
+    kill(fg_pid, SIGKILL);
 }
 
 /*
@@ -356,7 +365,10 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
-    return;
+    pid_t fg_pid = fgpid(jobs);
+    struct job_t* job = getjobpid(jobs, fg_pid);
+    job->state = ST;
+    kill(fg_pid, SIGTSTP);
 }
 
 /*********************
