@@ -135,7 +135,6 @@ int main(int argc, char **argv)
 
     /* Execute the shell's read/eval loop */
     while (1) {
-
 	/* Read command line */
 	if (emit_prompt) {
 	    printf("%s", prompt);
@@ -186,11 +185,18 @@ void eval(char *cmdline)
                 exit(0);
             }
         }
-        //父进程要等待子进程执行完
         else {
+            //父进程要等待子进程执行完
             //首先将job添加
             addjob(jobs, pid, bg ? BG : FG, cmdline);
-            waitfg(pid);
+            if (!bg) {
+                waitfg(pid);
+                deletejob(jobs, pid);
+            }
+            else {
+                struct job_t* job = getjobpid(jobs, pid);
+                printf("[%d] (%d) %s\n", job->jid, job->pid, cmdline);
+            }
         }
     }
     else {
@@ -207,10 +213,6 @@ void eval(char *cmdline)
             default:
                 break;
         }
-    }
-    if (bg) {
-        struct job_t* job = getjobpid(jobs, pid);
-        printf("[%d] (%d) %s\n", job->jid, job->pid, cmdline);
     }
 }
 
@@ -281,7 +283,7 @@ int builtin_cmd(char **argv)
         return COMMAND_QUIT;
     }
     else if (!strcmp(argv[0], "jobs")) {
-        return COMMAND_QUIT;
+        return COMMAND_JOBS;
     }
     else if (!strcmp(argv[0], "fg")) {
         return COMMAND_FG;
@@ -319,13 +321,13 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    while (waitpid(pid, NULL, WNOHANG) == 0) {
+    int wait_flag;
+    while ((wait_flag = waitpid(pid, NULL, WNOHANG)) == 0) {
         struct job_t* job = getjobpid(jobs, pid);
-        if (job->state != FG) {
+        if (!job || job->state != FG) {
             return;
         }
     }
-    deletejob(jobs, pid);
 }
 
 /*****************
@@ -342,7 +344,7 @@ void waitfg(pid_t pid)
 void sigchld_handler(int sig) 
 {
     pid_t pid;
-    while ((pid = waitpid(-1, NULL, 0)) > 0) {
+    while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
         deletejob(jobs, pid);
     }
 }
@@ -589,6 +591,5 @@ void sigquit_handler(int sig)
     printf("Terminating after receipt of SIGQUIT signal\n");
     exit(1);
 }
-
 
 
